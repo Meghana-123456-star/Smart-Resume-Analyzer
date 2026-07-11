@@ -27,7 +27,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 try:
     import nltk
     print("Downloading NLTK data...")
-    nltk.download('punkt_tab', quiet=True)
+    nltk.download('punkt', quiet=True)
     nltk.download('stopwords', quiet=True)
     print("✓ NLTK data ready")
 except Exception as e:

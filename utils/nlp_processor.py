@@ -4,19 +4,14 @@ from nltk.corpus import stopwords
 
 # Download required NLTK data
 try:
-    nltk.data.find('tokenizers/punkt_tab')
-except LookupError:
-    nltk.download('punkt_tab')
-
-try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
-    nltk.download('punkt')
+    nltk.download('punkt', quiet=True)
 
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
-    nltk.download('stopwords')
+    nltk.download('stopwords', quiet=True)
 
 
 def preprocess_text(text):
@@ -25,11 +20,17 @@ def preprocess_text(text):
     """
     try:
         tokens = word_tokenize(text.lower())
-    except:
+    except Exception as e:
         # Fallback to simple split if tokenizer fails
+        print(f"Tokenizer warning: {e}, using simple split")
         tokens = text.lower().split()
     
-    stop_words = set(stopwords.words('english'))
+    try:
+        stop_words = set(stopwords.words('english'))
+    except:
+        # Fallback: use common English stopwords if NLTK stopwords not available
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which', 'who', 'when', 'where', 'why', 'how'}
+    
     filtered_tokens = [token for token in tokens if token.isalnum() and token not in stop_words]
     return filtered_tokens
 
