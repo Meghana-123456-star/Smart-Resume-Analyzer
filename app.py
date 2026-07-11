@@ -5,14 +5,10 @@ Analyzes resumes and matches them with suitable job roles
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
+import sys
 from werkzeug.utils import secure_filename
-from utils.pdf_reader import extract_text_from_pdf
-from utils.nlp_processor import extract_keywords
-from utils.similarity import get_match_percentage
-from utils.recommender import recommend_jobs
-from utils.ai import analyze_resume, analyze_job_description
 
-# Create Flask app with templates folder
+# Configure app before imports that need it
 app = Flask(__name__, template_folder='templates')
 
 # Configuration
@@ -22,9 +18,32 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+app.config['DEBUG'] = os.environ.get('FLASK_ENV', 'development') == 'development'
 
 # Create upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Download NLTK data on startup (for Render deployment)
+try:
+    import nltk
+    print("Downloading NLTK data...")
+    nltk.download('punkt_tab', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    print("✓ NLTK data ready")
+except Exception as e:
+    print(f"Warning: Could not download NLTK data: {e}")
+
+# Now import utilities
+try:
+    from utils.pdf_reader import extract_text_from_pdf
+    from utils.nlp_processor import extract_keywords
+    from utils.similarity import get_match_percentage
+    from utils.recommender import recommend_jobs
+    from utils.ai import analyze_resume, analyze_job_description
+    print("✓ All modules loaded successfully")
+except ImportError as e:
+    print(f"Error importing modules: {e}", file=sys.stderr)
+    sys.exit(1)
 
 
 def allowed_file(filename):
@@ -35,7 +54,11 @@ def allowed_file(filename):
 @app.route('/')
 def index():
     """Home page - resume upload."""
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        print(f"Error rendering index: {e}")
+        return jsonify({'error': f'Error loading page: {str(e)}'}), 500
 
 
 @app.route('/upload', methods=['POST'])
@@ -75,11 +98,12 @@ def upload_resume():
             return jsonify({'error': 'Resume appears to be empty or invalid'}), 400
         
         # Analyze resume
-        analysis = analyze_resume(resume_text)
-        keywords = extract_keywords(resume_text, num_keywords=15)
-        
-        # Get job recommendations
-        recommendations = recommend_jobs(resume_text)
+        try:
+            analysis = analyze_resume(resume_text)
+            keywords = extract_keywords(resume_text, num_keywords=15)
+            recommendations = recommend_jobs(resume_text)
+        except Exception as e:
+            return jsonify({'error': f'Error analyzing resume: {str(e)}'}), 500
         
         # Prepare response data
         result_data = {
@@ -94,6 +118,7 @@ def upload_resume():
         return jsonify(result_data), 200
     
     except Exception as e:
+        print(f"Upload error: {e}")
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
@@ -102,17 +127,21 @@ def analyze_manual():
     """Analyze resume text provided manually."""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+        
         resume_text = data.get('resume_text', '').strip()
         
         if not resume_text or len(resume_text) < 10:
             return jsonify({'error': 'Please provide resume text'}), 400
         
         # Analyze resume
-        analysis = analyze_resume(resume_text)
-        keywords = extract_keywords(resume_text, num_keywords=15)
-        
-        # Get job recommendations
-        recommendations = recommend_jobs(resume_text)
+        try:
+            analysis = analyze_resume(resume_text)
+            keywords = extract_keywords(resume_text, num_keywords=15)
+            recommendations = recommend_jobs(resume_text)
+        except Exception as e:
+            return jsonify({'error': f'Error analyzing resume: {str(e)}'}), 500
         
         result_data = {
             'analysis': analysis,
@@ -123,6 +152,7 @@ def analyze_manual():
         return jsonify(result_data), 200
     
     except Exception as e:
+        print(f"Analyze error: {e}")
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
 
@@ -131,6 +161,9 @@ def match_resume():
     """Match resume with specific job description."""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+        
         resume_text = data.get('resume_text', '').strip()
         job_description = data.get('job_description', '').strip()
         
@@ -140,15 +173,18 @@ def match_resume():
         if not job_description or len(job_description) < 10:
             return jsonify({'error': 'Please provide job description'}), 400
         
-        # Calculate match percentage
-        match_percentage = get_match_percentage(resume_text, job_description)
-        
-        # Extract keywords from both texts
-        resume_keywords = extract_keywords(resume_text, num_keywords=10)
-        job_keywords = extract_keywords(job_description, num_keywords=10)
-        
-        # Find common keywords
-        common_keywords = list(set(resume_keywords) & set(job_keywords))
+        try:
+            # Calculate match percentage
+            match_percentage = get_match_percentage(resume_text, job_description)
+            
+            # Extract keywords from both texts
+            resume_keywords = extract_keywords(resume_text, num_keywords=10)
+            job_keywords = extract_keywords(job_description, num_keywords=10)
+            
+            # Find common keywords
+            common_keywords = list(set(resume_keywords) & set(job_keywords))
+        except Exception as e:
+            return jsonify({'error': f'Error matching: {str(e)}'}), 500
         
         result_data = {
             'match_percentage': match_percentage,
@@ -161,6 +197,7 @@ def match_resume():
         return jsonify(result_data), 200
     
     except Exception as e:
+        print(f"Match error: {e}")
         return jsonify({'error': f'Error: {str(e)}'}), 500
 
 
@@ -189,9 +226,25 @@ def internal_error(e):
 
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV', 'development') == 'development'
-    print("Starting Smart Resume Analyzer...")
-    print(f"Visit http://localhost:{port} to use the application")
-    app.run(debug=debug, host='0.0.0.0', port=port)
+    flask_env = os.environ.get('FLASK_ENV', 'development')
+    debug = flask_env == 'development'
+    
+    print("\n" + "="*60)
+    print("🚀 Starting Smart Resume Analyzer")
+    print("="*60)
+    print(f"Environment: {flask_env}")
+    print(f"Debug: {debug}")
+    print(f"Port: {port}")
+    print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
+    print("="*60)
+    
+    if flask_env == 'production':
+        print("⚠️  Production mode - Debug is OFF")
+    else:
+        print("ℹ️  Development mode")
+    
+    print("\n✓ Starting Flask application...")
+    print("="*60 + "\n")
+    
+    app.run(debug=debug, host='0.0.0.0', port=port, use_reloader=False)
