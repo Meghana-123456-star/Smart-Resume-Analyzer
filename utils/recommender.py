@@ -1,44 +1,63 @@
 """
 Recommender system for suggesting suitable jobs based on resume.
+Uses pure Python CSV reading without pandas.
 """
-import pandas as pd
+import csv
 from utils.similarity import get_match_percentage
 
 
 def load_job_roles(csv_path):
     """
-    Load job roles from CSV file.
+    Load job roles from CSV file using pure Python.
+    Returns list of dictionaries with job data.
     """
     try:
-        df = pd.read_csv(csv_path)
-        return df
+        jobs = []
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                jobs.append(row)
+        return jobs
     except FileNotFoundError:
         print(f"Error: File {csv_path} not found")
-        return None
+        return []
     except Exception as e:
         print(f"Error loading job roles: {str(e)}")
-        return None
+        return []
 
 
 def recommend_jobs(resume_text, csv_path="dataset/job_roles.csv", top_n=5):
     """
     Recommend top N job roles based on resume similarity.
     """
-    job_roles_df = load_job_roles(csv_path)
+    jobs = load_job_roles(csv_path)
     
-    if job_roles_df is None or job_roles_df.empty:
+    if not jobs:
         return []
     
     recommendations = []
     
-    # Handle different column names
-    role_col = 'Role' if 'Role' in job_roles_df.columns else 'title' if 'title' in job_roles_df.columns else job_roles_df.columns[0]
-    skills_col = 'Skills' if 'Skills' in job_roles_df.columns else 'description' if 'description' in job_roles_df.columns else (job_roles_df.columns[1] if len(job_roles_df.columns) > 1 else None)
-    
-    for idx, row in job_roles_df.iterrows():
-        job_title = str(row[role_col]) if role_col in row.index else 'N/A'
-        job_description = str(row[skills_col]) if skills_col and skills_col in row.index else ''
+    for job in jobs:
+        # Handle different column names
+        job_title = None
+        job_description = ''
         
+        # Try to find role/title column
+        for col in ['Role', 'role', 'title', 'Title', 'Job Title', 'job_title']:
+            if col in job:
+                job_title = job[col]
+                break
+        
+        # Try to find skills/description column
+        for col in ['Skills', 'skills', 'description', 'Description', 'Job Description', 'job_description']:
+            if col in job:
+                job_description = job[col]
+                break
+        
+        if not job_title:
+            job_title = 'Unknown Role'
+        
+        # Calculate match score
         match_score = get_match_percentage(resume_text, job_description)
         
         recommendations.append({
