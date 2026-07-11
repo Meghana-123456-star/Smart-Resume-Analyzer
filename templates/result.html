@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results - Smart Resume Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📊 Analysis Results</h1>
+        </header>
+
+        <main class="main-content">
+            <button class="btn-secondary" onclick="window.history.back()">← Go Back</button>
+            
+            <div class="results-section">
+                <div id="resultsContent"></div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 Smart Resume Analyzer | Powered by AI</p>
+        </footer>
+    </div>
+
+    <script>
+        // Display results from previous page
+        window.addEventListener('load', function() {
+            const resultsData = sessionStorage.getItem('analysisResults');
+            if (resultsData) {
+                const data = JSON.parse(resultsData);
+                displayStoredResults(data);
+            }
+        });
+
+        function displayStoredResults(data) {
+            const content = `
+                <div class="result-card">
+                    <h3>Resume Analysis</h3>
+                    <p>${JSON.stringify(data, null, 2)}</p>
+                </div>
+            `;
+            document.getElementById('resultsContent').innerHTML = content;
+        }
+    </script>
+</body>
+</html>
